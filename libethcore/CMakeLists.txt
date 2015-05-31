@@ -34,6 +34,10 @@ if (ETHASHCL)
 	target_link_libraries(${EXECUTABLE} ethash-cl)
 endif ()
 
+if (ETHASHCUDA)
+	target_link_libraries(${EXECUTABLE} ethash-cuda)
+endif ()
+
 if (CPUID_FOUND)
 	target_link_libraries(${EXECUTABLE} ${CPUID_LIBRARIES})
 endif ()

@@ -38,6 +38,7 @@ namespace eth
  * typename Solution
  * typename CPUMiner
  * typename GPUMiner
+ * typename CPUMiner
  * void assignResult(BlockInfo&, Result)
  * and a few others. TODO
  */

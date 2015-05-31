@@ -32,6 +32,7 @@
 #include "Miner.h"
 
 class ethash_cl_miner;
+class ethash_cuda_miner;
 
 namespace dev
 {
@@ -39,6 +40,7 @@ namespace eth
 {
 
 class EthashCLHook;
+class EthashCUDAHook;
 
 class Ethash
 {
@@ -141,6 +143,44 @@ public:
 #else
 	using GPUMiner = CPUMiner;
 #endif
+
+	#if ETH_ETHASHCUDA || !ETH_TRUE
+		class CUDAMiner: public Miner, Worker
+		{
+			friend class dev::eth::EthashCUDAHook;
+
+		public:
+			CUDAMiner(ConstructionInfo const& _ci);
+			~CUDAMiner();
+
+			static unsigned instances() { return s_numInstances > 0 ? s_numInstances : 1; }
+			static std::string platformInfo();
+			static unsigned getNumDevices();
+			// static void setDefaultPlatform(unsigned _id) { s_platformId = _id; }
+			static void setDefaultDevice(unsigned _id) { s_deviceId = _id; }
+			static void setNumInstances(unsigned _instances) { s_numInstances = std::min<unsigned>(_instances, getNumDevices()); }
+
+		protected:
+			void kickOff() override;
+			void pause() override;
+
+		private:
+			void workLoop() override;
+			bool report(uint64_t _nonce);
+
+			using Miner::accumulateHashes;
+
+			EthashCUDAHook* m_hook = nullptr;
+			ethash_cuda_miner* m_miner = nullptr;
+
+			h256 m_minerSeed;		///< Last seed in m_miner
+			static unsigned s_platformId;
+			static unsigned s_deviceId;
+			static unsigned s_numInstances;
+		};
+	#else
+		using CUDAMiner = CPUMiner;
+	#endif
 };
 
 }

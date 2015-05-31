@@ -55,7 +55,9 @@ static void add_definition(std::string& source, char const* id, unsigned value)
 }
 
 ethash_cl_miner::search_hook::~search_hook() {}
-
+/*----------------------------------------------------------------------
+*	HOST ONLY FUNCTIONS
+*---------------------------------------------------------------------*/
 ethash_cl_miner::ethash_cl_miner()
 :	m_opencl_1_1()
 {
@@ -128,6 +130,9 @@ void ethash_cl_miner::finish()
 		m_queue.finish();
 }
 
+/******************************************
+* FUNCTION: init
+*******************************************/
 bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size, unsigned _platformId, unsigned _deviceId)
 {
 	// get all platforms
@@ -226,6 +231,9 @@ bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 	return true;
 }
 
+/******************************************
+* FUNCTION: hash
+*******************************************/
 void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
 {
 	struct pending_batch

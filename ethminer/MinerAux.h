@@ -127,6 +127,16 @@ public:
 				cerr << "Bad " << arg << " option: " << argv[i] << endl;
 				throw BadArgument();
 			}
+		else if (arg == "--cuda-device" && i + 1 < argc)
+			try {
+				cudaDevice = stol(argv[++i]);
+				miningThreads = 1;
+			}
+			catch (...)
+			{
+				cerr << "Bad " << arg << " option: " << argv[i] << endl;
+				throw BadArgument();
+			}
 		else if (arg == "--phone-home" && i + 1 < argc)
 		{
 			string m = argv[++i];
@@ -172,6 +182,11 @@ public:
 		else if (arg == "-G" || arg == "--opencl")
 		{
 			m_minerType = MinerType::GPU;
+			miningThreads = 1;
+		}
+		else if (arg == "-N" || arg == "--cuda") // N for Nvidia
+		{
+			m_minerType = MinerType::CUDA;
 			miningThreads = 1;
 		}
 		else if (arg == "--no-precompute")
@@ -257,6 +272,12 @@ public:
 			ProofOfWork::GPUMiner::setDefaultDevice(openclDevice);
 			ProofOfWork::GPUMiner::setNumInstances(miningThreads);
 		}
+		else if (m_minerType == MinerType::CUDA)
+		{
+			//ProofOfWork::CUDAMiner::setDefaultPlatform(openclPlatform);
+			ProofOfWork::CUDAMiner::setDefaultDevice(cudaDevice);
+			ProofOfWork::CUDAMiner::setNumInstances(miningThreads);
+		}
 		if (mode == OperationMode::DAGInit)
 			doInitDAG(initDAG);
 		else if (mode == OperationMode::Benchmark)
@@ -299,7 +320,8 @@ public:
 	enum class MinerType
 	{
 		CPU,
-		GPU
+		GPU,
+		CUDA
 	};
 
 	MinerType minerType() const { return m_minerType; }
@@ -323,7 +345,7 @@ private:
 		GenericFarm<Ethash> f;
 		f.onSolutionFound([&](ProofOfWork::Solution) { return false; });
 
-		string platformInfo = _m == MinerType::CPU ? ProofOfWork::CPUMiner::platformInfo() : _m == MinerType::GPU ? ProofOfWork::GPUMiner::platformInfo() : "";
+		string platformInfo = _m == MinerType::CPU ? ProofOfWork::CPUMiner::platformInfo() : _m == MinerType::GPU ? ProofOfWork::GPUMiner::platformInfo() : _m == MinerType::CUDA ? "CUDA" : "";
 		cout << "Benchmarking on platform: " << platformInfo << endl;
 
 		cout << "Preparing DAG..." << endl;
@@ -336,6 +358,8 @@ private:
 			f.startCPU();
 		else if (_m == MinerType::GPU)
 			f.startGPU();
+		else if (_m == MinerType::CUDA)
+			f.startCUDA();
 
 		map<uint64_t, MiningProgress> results;
 		uint64_t mean = 0;
@@ -402,6 +426,8 @@ private:
 			f.startCPU();
 		else if (_m == MinerType::GPU)
 			f.startGPU();
+		else if (_m == MinerType::CUDA)
+			f.startCUDA();
 
 		ProofOfWork::WorkPackage current;
 		EthashAux::FullType dag;
@@ -479,6 +505,7 @@ private:
 	MinerType m_minerType = MinerType::CPU;
 	unsigned openclPlatform = 0;
 	unsigned openclDevice = 0;
+    unsigned cudaDevice = 0;
 	unsigned miningThreads = UINT_MAX;
 
 	/// DAG initialisation param.
