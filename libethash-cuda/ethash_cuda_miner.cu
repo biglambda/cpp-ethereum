@@ -566,7 +566,7 @@ using namespace std;
 /*----------------------------------------------------------------------
 *	HOST ONLY FUNCTIONS
 *---------------------------------------------------------------------*/
-//extern "C++" {
+
 
 ethash_cuda_miner::ethash_cuda_miner()
 {
@@ -654,15 +654,17 @@ void ethash_cuda_miner::finish()
 /******************************************
 * FUNCTION: init
 *******************************************/
-bool ethash_cuda_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size, unsigned _platformId, unsigned _deviceId) {
+__host__ bool ethash_cuda_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned workgroup_size, unsigned _platformId, unsigned _deviceId) {
 //bool ethash_cuda_miner::init(ethash_params const& params, ethash_h256_t const *seed, unsigned workgroup_size)
 	// store params
 	//m_params = params;
+	cudaError r;
 
 	unsigned num_devices = get_num_devices();
 	if (_deviceId >= num_devices) {
-		cout << "deviceId " << _deviceId << " does not exist, defaulting to highest deviceId available" << num_devices - 1 << ".";
+		cout << "deviceId " << _deviceId << " does not exist, defaulting to highest deviceId available" << num_devices - 1 << "." << endl;
 	}
+    cout << "deviceId:" << _deviceId << " num_devices:" << num_devices << endl;  
 
 	_deviceId = (_deviceId < num_devices) ? _deviceId : num_devices - 1;
 	cudaSetDevice(_deviceId);
@@ -672,18 +674,40 @@ bool ethash_cuda_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned wo
 
 	// create buffer for dag
 	char* dag_ptr;
-	cudaMalloc(&dag_ptr, _dagSize);
+	r = cudaMalloc(&dag_ptr, _dagSize);
+	if (r != cudaSuccess)
+	{
+		cout << "error: cudaMalloc(&dag_ptr, _dagSize): " << cudaGetErrorString(r) << endl;
+		return false;
+	}
 
+	cout << "m_header:" << (void *)m_header << endl;
 	// create buffer for header
-	cudaMalloc(&m_header, 32);
+	r = cudaMalloc(&m_header, 32);
+	if (r != cudaSuccess)
+	{
+		cout << "error: cudaMalloc(&m_header, 32);" << cudaGetErrorString(r) << endl;
+		return false;
+	}
+	cout << "m_header:" << m_header << endl;
 
 	cudaMemcpy((void *)_dag, dag_ptr, _dagSize, cudaMemcpyHostToDevice);
 
 	// create mining buffers
 	for (unsigned i = 0; i != c_num_buffers; ++i)
 	{
-		cudaMalloc(&m_hash_buf[i], 32*c_hash_batch_size);
-		cudaMalloc(&m_search_buf[i], (c_max_search_results + 1) * sizeof(uint32_t));
+		r = cudaMalloc(&m_hash_buf[i], 32*c_hash_batch_size);
+		if (r != cudaSuccess)
+		{
+			cout << "error: cudaMalloc(&m_hash_buf[i], 32*c_hash_batch_size);" << cudaGetErrorString(r) << endl;
+			return false;
+		}
+		r = cudaMalloc(&m_search_buf[i], (c_max_search_results + 1) * sizeof(uint32_t));
+		if (r != cudaSuccess)
+		{
+			cout << "error: cudaMalloc(&m_search_buf[i], (c_max_search_results + 1) * sizeof(uint32_t));" << cudaGetErrorString(r) << endl;
+			return false;
+		}
 	}
 	return true;
 }
@@ -700,6 +724,7 @@ struct pending_batch
 
 void ethash_cuda_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
 {
+	cout << "hash" << endl;
 	std::queue<pending_batch> pending;
 
 	cudaMemcpy( m_header, header, 32, cudaMemcpyHostToDevice);
@@ -749,25 +774,47 @@ struct pending_batch_search
 	unsigned buf;
 };
 
-void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
+__host__ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
 {
+	cudaError kerr;
 	std::queue<pending_batch_search> pending;
 	static uint32_t const c_zero = 0;
 	uint32_t* results = (uint32_t*)malloc((1+c_max_search_results) * sizeof(uint32_t));
 
 	// update header constant buffer
+    cout << "m_header:" << (void *)m_header << endl;
 	cudaMemcpy(m_header, header, 32, cudaMemcpyHostToDevice);
+	kerr = cudaGetLastError();
+	if (cudaSuccess != kerr)
+	{
+		cout << "error: cudaMemcpy hostToDevice m_header: " << cudaGetErrorString(kerr) << endl;
+		return;
+	}
 
 	for (unsigned i = 0; i != c_num_buffers; ++i)
 		cudaMemcpy( m_search_buf[i], &c_zero, 4, cudaMemcpyHostToDevice);
- 
+	kerr = cudaGetLastError();
+	if (cudaSuccess != kerr)
+	{
+		cout << "error: cudaMemcpy hostToDevice m_search_buf: " << cudaGetErrorString(kerr) << endl;
+		return;
+	}
+
+   
 	unsigned buf = 0;
+
 	for (uint64_t start_nonce = 0; ; start_nonce += c_search_batch_size)
 	{
 		// execute it!
 		dim3 dimGrid(512, c_search_batch_size/512, 1);
 		ethash_search<<<dimGrid, m_workgroup_size>>>((uint*)m_search_buf[buf],
 				(hash32_t const*)m_header, (hash128_t const*)m_dag, start_nonce, target, ~0U);
+
+		kerr = cudaGetLastError();
+		if (cudaSuccess != kerr)
+		{
+			cout << "error: ethash_searchL:" << cudaGetErrorString(kerr) << endl;
+		}
 
 		pending_batch_search temp_pending_batch;
 		temp_pending_batch.start_nonce = start_nonce;
@@ -783,8 +830,8 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 
 			// could use pinned host pointer instead
 			cudaMemcpy( results, m_search_buf[batch.buf], (1+c_max_search_results) * sizeof(uint32_t), cudaMemcpyDeviceToHost );
-			
-			unsigned num_found = std::min(results[0], (uint32_t) c_max_search_results);
+
+			unsigned num_found = std::min<unsigned>(results[0], (uint32_t) c_max_search_results);
 
 			uint64_t nonces[c_max_search_results];
 			for (unsigned i = 0; i != num_found; ++i)
@@ -792,22 +839,25 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 
 			bool exit = num_found && hook.found(nonces, num_found);
 			exit |= hook.searched(batch.start_nonce, c_search_batch_size); // always report searched before exit
-			if (exit)
+			if (exit) {
 				break;
+			}
 				
 			// end search prematurely due to poor performance
-			if(start_nonce == 524288)
-				break;
+			//if(start_nonce == 524288) {
+			//	cout << "premature exit";
+			//	break;
+			//}
 
 			// reset search buffer if we're still going
-			if (num_found)
+			cout << "num_found " << num_found << endl;
+ 			if (num_found)
 				cudaMemcpy(m_search_buf[batch.buf], &c_zero, 4, cudaMemcpyHostToDevice);
 
 			pending.pop();
+			//cout << "after pending.pop()" << endl;
 		}
 	}
 	
 	delete[] results;
 }
-
-//}

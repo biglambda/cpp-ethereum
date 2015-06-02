@@ -481,7 +481,7 @@ void Ethash::CUDAMiner::workLoop()
 		cnote << "workLoop" << !!m_miner << m_minerSeed << w.seedHash;
 		if (!m_miner || m_minerSeed != w.seedHash)
 		{
-			cnote << "Initialising miner...";
+			cnote << "Initialising CUDA miner...";
 			m_minerSeed = w.seedHash;
 
 			delete m_miner;
@@ -511,7 +511,7 @@ void Ethash::CUDAMiner::workLoop()
 	}
 	catch (cl::Error const& _e)
 	{
-		cwarn << "Error GPU mining: " << _e.what() << "(" << _e.err() << ")";
+		cwarn << "Error CUDA mining: " << _e.what() << "(" << _e.err() << ")";
 	}
 }
 

@@ -24,6 +24,7 @@
 #include <thread>
 #include <list>
 #include <atomic>
+#include <iostream>
 #include <libdevcore/Common.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
@@ -180,8 +181,9 @@ private:
 	template <class MinerType>
 	bool start()
 	{
+		std::cout << "start" << std::endl;
 		WriteGuard l(x_minerWork);
-		if (!m_miners.empty() && !!std::dynamic_pointer_cast<MinerType>(m_miners[0]))
+		if (!m_miners.empty() && !!std::dynamic_pointer_cast<MinerType>(m_miners[0])) 
 			return true;
 		m_miners.clear();
 		m_miners.reserve(MinerType::instances());

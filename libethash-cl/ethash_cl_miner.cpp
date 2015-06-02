@@ -236,6 +236,7 @@ bool ethash_cl_miner::init(uint8_t const* _dag, uint64_t _dagSize, unsigned work
 *******************************************/
 void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, unsigned count)
 {
+	cout << "clhash" << endl;
 	struct pending_batch
 	{
 		unsigned base;
@@ -305,6 +306,7 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 
 void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook& hook)
 {
+	cout << "clsearch" << endl;
 	struct pending_batch
 	{
 		uint64_t start_nonce;
@@ -344,12 +346,13 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 	m_search_kernel.setArg(4, target);
 	m_search_kernel.setArg(5, ~0u);
 
-
+	cout << "c_search_batch_size" << c_search_batch_size << endl;
 	unsigned buf = 0;
 	std::random_device engine;
 	uint64_t start_nonce = std::uniform_int_distribution<uint64_t>()(engine);
 	for (; ; start_nonce += c_search_batch_size)
 	{
+		//cout << "clnonce" << start_nonce << endl;
 		// supply output buffer to kernel
 		m_search_kernel.setArg(0, m_search_buf[buf]);
 		m_search_kernel.setArg(3, start_nonce);
